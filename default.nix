@@ -3,24 +3,40 @@
 with lib;
 
 let
-  unpackTo = prefix: path: runCommand "source" {} ''
-    mkdir $out
-    tar -xaf ${path} -C $out
-
-    if [ ! -e $out/package ]; then
-      mkdir $out/package
-      mv -f $out/* $out/package || true
-    fi
-
-    mkdir -p $out/$(dirname ${prefix})
-    mv $out/package $out/${prefix}
+  prefixPath = prefix: path: runCommand "source" {} ''
+    mkdir -p $(dirname $out/${prefix})
+    ln -s ${path} $out/${prefix}
   '';
 
-  fetchPackage = prefix: { resolved, integrity, ... }:
-    unpackTo prefix (fetchurl {
-      url = resolved;
-      hash = integrity;
-    });
+  unpack = path: runCommand "source" {} ''
+    mkdir $out
+    tar -xaf ${path} -C $out --strip-components=1
+  '';
+
+  fetchGitPackage = { from, version, ... }:
+    let
+      urlAndRef = splitString "#" from;
+      urlAndRev = splitString "#" version;
+      url = replaceStrings [ "git://" ] [ "https://" ] (head urlAndRef);
+      ref = last urlAndRef;
+      rev = last urlAndRev;
+    in
+    fetchGit {
+      inherit url ref rev;
+    };
+
+  fetchURLPackage = { resolved, integrity, ... }: unpack (fetchurl {
+    url = resolved;
+    hash = integrity;
+  });
+
+  fetchPackage = prefix: attrs:
+    let
+      fetch = if attrs ? "from"
+        then fetchGitPackage
+        else fetchURLPackage;
+    in
+    prefixPath prefix (fetch attrs);
 in
 
 {
