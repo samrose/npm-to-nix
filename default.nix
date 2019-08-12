@@ -3,9 +3,11 @@
 with lib;
 
 let
-  prefixPath = prefix: path: runCommand "source" {} ''
-    mkdir -p $(dirname $out/${prefix})
-    ln -s ${path} $out/${prefix}
+  resolvePackage = { name, src, nodeModules }: runCommand "source" {} ''
+    mkdir -p $(dirname $out/${name})
+    cp -rs ${src} $out/${name}
+    chmod -R +w $out
+    ln -s ${nodeModules} $out/${name}/node_modules
   '';
 
   unpack = path: runCommand "source" {} ''
@@ -30,13 +32,30 @@ let
     hash = integrity;
   });
 
-  fetchPackage = prefix: attrs:
+  buildPackage = name: attrs:
     let
-      fetch = if attrs ? "from"
+      fetchPackage = if attrs ? "from"
         then fetchGitPackage
-        else fetchURLPackage;
+        else if attrs ? "resolved"
+        then fetchURLPackage
+        else null;
+
+      dependencies = if attrs ? "dependencies"
+        then attrs.dependencies
+        else {};
     in
-    prefixPath prefix (fetch attrs);
+    if fetchPackage != null
+    then resolvePackage {
+      inherit name;
+      src = fetchPackage attrs;
+      nodeModules = buildNodeModules dependencies;
+    }
+    else null;
+
+  buildNodeModules = dependencies: buildEnv {
+    name = "node_modules";
+    paths = mapAttrsToList buildPackage dependencies;
+  };
 in
 
 {
@@ -44,8 +63,5 @@ in
     let
       lockFile = importJSON "${src}/package-lock.json";
     in
-    buildEnv {
-      name = "node_modules";
-      paths = mapAttrsToList fetchPackage lockFile.dependencies;
-    };
+    buildNodeModules lockFile.dependencies;
 }
