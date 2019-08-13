@@ -19,8 +19,10 @@ let
     let
       urlAndRef = splitString "#" from;
       urlAndRev = splitString "#" version;
-      url = replaceStrings [ "git://" ] [ "https://" ] (head urlAndRef);
-      ref = last urlAndRef;
+      url = replaceStrings [ "git://" "github:" ] [ "https://" "https://github.com/" ] (head urlAndRef);
+      ref = if length urlAndRef == 1
+        then "HEAD"
+        else last urlAndRef;
       rev = last urlAndRev;
     in
     fetchGit {
