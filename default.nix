@@ -52,9 +52,9 @@ let
     }
     else null;
 
-  buildNodeModules = dependencies: buildEnv {
+  buildNodeModules = deps: buildEnv {
     name = "node_modules";
-    paths = mapAttrsToList buildPackage dependencies;
+    paths = mapAttrsToList buildPackage deps;
   };
 in
 
