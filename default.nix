@@ -1,13 +1,29 @@
-{ lib, fetchurl, buildEnv, runCommand }:
+{ lib, fetchurl, runCommand, symlinkJoin }:
 
 with lib;
 
 let
-  resolvePackage = { name, src, nodeModules }: runCommand "source" {} ''
+  resolveBin = name: target: source: ''
+    ln -rs $out/${name}/${source} $out/.bin/${target}
+  '';
+
+  resolvePackage = { name, src, nodeModules }:
+  let
+    meta = importJSON "${src}/package.json";
+    bin = {
+      null = {};
+      string."${meta.name}" = meta.bin;
+      set = meta.bin;
+    }."${builtins.typeOf meta.bin or null}";
+  in
+  runCommand "source" {} ''
+    mkdir -p $out/.bin
     mkdir -p $(dirname $out/${name})
-    cp -rs ${src} $out/${name}
+    cp -Lr ${src} $out/${name}
+    ${concatStringsSep "\n" (mapAttrsToList (resolveBin name) bin)}
+    chmod -R +x $out/.bin
     chmod -R +w $out
-    ln -s ${nodeModules} $out/${name}/node_modules
+    cp -r ${nodeModules} $out/${name}/node_modules
   '';
 
   unpack = path: runCommand "source" {} ''
@@ -54,10 +70,23 @@ let
     }
     else null;
 
-  buildNodeModules = deps: buildEnv {
+
+  buildNodeModulesSymlinked = deps: symlinkJoin {
     name = "node_modules";
     paths = mapAttrsToList buildPackage deps;
   };
+
+  buildNodeModules = deps:
+    let
+      nodeModules = buildNodeModulesSymlinked deps;
+    in
+    runCommand "node_modules" {} ''
+      mkdir -p $out
+      for f in ${nodeModules}/*; do
+        cp -Lr $f $out
+      done
+      cp -r ${nodeModules}/.bin $out || true
+    '';
 in
 
 {
