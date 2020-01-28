@@ -35,7 +35,7 @@ let
     let
       urlAndRef = splitString "#" from;
       urlAndRev = splitString "#" version;
-      url = replaceStrings [ "git://" "github:" ] [ "https://" "https://github.com/" ] (head urlAndRef);
+      url = replaceStrings [ "git://" "github:" ] [ "https://" "https://github.com/" ] [ "git+https" "https" ] (head urlAndRef);
       ref = if length urlAndRef == 1
         then "HEAD"
         else last urlAndRef;
